@@ -7,16 +7,13 @@ const merge = require('webpack-merge')
 const baseWebpackConfig = require('./webpack.base.conf')
 const CopyWebpackPlugin = require('copy-webpack-plugin')
 const HtmlWebpackPlugin = require('html-webpack-plugin')
-const MiniCssExtractPlugin = require('mini-css-extract-plugin')
+const ExtractTextPlugin = require('extract-text-webpack-plugin')
 const OptimizeCSSPlugin = require('optimize-css-assets-webpack-plugin')
 const TerserPlugin = require('terser-webpack-plugin');
 
 const env = require('../config/prod.env')
 
-const ExtractTextPlugin = require("extract-text-webpack-plugin");
-
 const webpackConfig = merge(baseWebpackConfig, {
-  mode: 'production',
   module: {
     rules: utils.styleLoaders({
       sourceMap: config.build.productionSourceMap,
@@ -24,24 +21,26 @@ const webpackConfig = merge(baseWebpackConfig, {
       usePostCSS: true
     })
   },
-  //devtool: config.build.productionSourceMap ? config.build.devtool : false,
+  devtool: config.build.productionSourceMap ? config.build.devtool : false,
   output: {
     path: config.build.assetsRoot,
-    filename: utils.assetsPath('js/[name].[chunkhash].js'),
-    chunkFilename: utils.assetsPath('js/[id].[chunkhash].js')
+    filename: utils.assetsPath('js/[name].[hash:8].js'),
+    //chunkFilename: utils.assetsPath('js/[id].[hash:8].js')
   },
   plugins: [
-    new ExtractTextPlugin({
-      filename: 'style.css'
-    }),
     // http://vuejs.github.io/vue-loader/en/workflow/production.html
     new webpack.DefinePlugin({
       'process.env': env
     }),
     
     // extract css into its own file
-    new MiniCssExtractPlugin({
-      filename: utils.assetsPath('css/[name].[chunkhash].css'),
+    new ExtractTextPlugin({
+      filename: utils.assetsPath('css/[name].[hash:8].css'),
+      // Setting the following option to `false` will not extract CSS from codesplit chunks.
+      // Their CSS will instead be inserted dynamically with style-loader when the codesplit chunk has been loaded by webpack.
+      // It's currently set to `true` because we are seeing that sourcemaps are included in the codesplit bundle as well when it's `false`, 
+      // increasing file size: https://github.com/vuejs-templates/webpack/issues/1110
+      allChunks: true,
     }),
     // Compress extracted CSS. We are using this plugin so that possible
     // duplicated CSS from different components can be deduped.
@@ -64,15 +63,19 @@ const webpackConfig = merge(baseWebpackConfig, {
         // more options:
         // https://github.com/kangax/html-minifier#options-quick-reference
       },
-      // necessary to consistently work with multiple chunks
-      chunksSortMode: 'none'
+      // necessary to consistently work with multiple chunks via CommonsChunkPlugin
+      chunksSortMode: 'dependency'
     }),
     // keep module.id stable when vendor modules does not change
-    new webpack.NamedChunksPlugin(),
     new webpack.HashedModuleIdsPlugin(),
+    // enable scope hoisting
+    new webpack.optimize.ModuleConcatenationPlugin(),
+    // split vendor js into its own file
     new webpack.optimize.LimitChunkCountPlugin({
-      minChunkSize: Infinity
+      //maxChunks: 20000,
+      minChunkSize: 8000
     }),
+    
     // copy custom static assets
     new CopyWebpackPlugin([
       {
@@ -82,6 +85,7 @@ const webpackConfig = merge(baseWebpackConfig, {
       }
     ])
   ],
+
   optimization: {
     minimize: true,
     sideEffects: false,
@@ -97,6 +101,21 @@ const webpackConfig = merge(baseWebpackConfig, {
       // },
     },
     runtimeChunk: false,
+    // minimizer: [
+    //   new UglifyJsPlugin({
+    //     uglifyOptions: {
+    //       compress: {
+    //         // warnings: false
+    //       },
+
+    //       warnings: false
+    //     },
+    //     sourceMap: config.build.productionSourceMap,
+    //     parallel: true,
+    //     cache: true
+    //   }),
+    // ],
+
     minimizer: [new TerserPlugin({
       sourceMap: false,
       parallel: false,
@@ -110,15 +129,14 @@ if (config.build.productionGzip) {
 
   webpackConfig.plugins.push(
     new CompressionWebpackPlugin({
-      filename: '[path].gz[query]',
+      asset: '[path].gz[query]',
       algorithm: 'gzip',
       test: new RegExp(
         '\\.(' +
         config.build.productionGzipExtensions.join('|') +
         ')$'
       ),
-      threshold: 8192,
-      compressionOptions: { level: 1 },
+      threshold: 10240,
       minRatio: 0.8
     })
   )
